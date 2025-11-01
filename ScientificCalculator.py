@@ -1,153 +1,121 @@
 import streamlit as st
 import math
 
-# --- Page Config ---
-st.set_page_config(page_title="Casio 911EX - Scientific Calculator", page_icon="🧮", layout="centered")
+# --- Page setup ---
+st.set_page_config(page_title="Retro Scientific Calculator", page_icon="🧮", layout="centered")
 
-# --- Custom CSS ---
+# --- Custom Retro CSS ---
 st.markdown("""
     <style>
-    .stApp {
-        background: radial-gradient(circle at 20% 20%, #0e0e0e, #1a1a1a);
-        color: #fff;
-        font-family: 'Poppins', sans-serif;
-    }
-    .calc-container {
-        max-width: 400px;
-        background: linear-gradient(145deg, #2d2d2d, #1f1f1f);
-        border-radius: 25px;
-        margin: 40px auto;
-        padding: 20px;
-        box-shadow: 10px 10px 20px #0a0a0a, -5px -5px 15px #3a3a3a;
-    }
-    .display {
-        background: #e0f0dc;
-        color: #000;
-        font-size: 30px;
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 25px;
-        text-align: right;
-        font-family: 'Courier New', monospace;
-        box-shadow: inset 2px 2px 8px #9fa9a3;
-    }
-    .stButton > button {
-        height: 60px;
-        width: 100%;
-        border: none;
-        border-radius: 12px;
-        font-size: 20px;
-        font-weight: 600;
-        transition: 0.1s ease-in-out;
-        color: white;
-    }
-    /* Different button colors */
-    .number-btn > button {
-        background-color: #404040;
-    }
-    .number-btn > button:hover {
-        background-color: #555;
-    }
-    .func-btn > button {
-        background-color: #0052cc;
-    }
-    .func-btn > button:hover {
-        background-color: #0066ff;
-    }
-    .op-btn > button {
-        background-color: #ff9500;
-    }
-    .op-btn > button:hover {
-        background-color: #ffaa33;
-    }
-    .clear-btn > button {
-        background-color: #e53935;
-    }
-    .clear-btn > button:hover {
-        background-color: #ff5c5c;
-    }
-    .equal-btn > button {
-        background-color: #0096FF;
-    }
-    .equal-btn > button:hover {
-        background-color: #33adff;
-    }
-    h1 {
-        text-align: center;
-        color: #00BFFF;
-        margin-bottom: 0;
-    }
+        body {
+            background-color: #1e1e1e;
+            color: #00FFCC;
+            font-family: 'Courier New', monospace;
+        }
+
+        .calculator {
+            width: 320px;
+            margin: 50px auto;
+            background-color: #2c2c2c;
+            border: 3px solid #00FFCC;
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 0 30px #00FFCC66;
+        }
+
+        .display {
+            background-color: #0d0d0d;
+            color: #00FF66;
+            border: 2px solid #00FFCC;
+            border-radius: 5px;
+            font-size: 28px;
+            text-align: right;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .stButton>button {
+            background-color: #111;
+            color: #00FFCC;
+            border: 1px solid #00FFCC;
+            border-radius: 8px;
+            font-size: 18px;
+            height: 55px;
+            width: 70px;
+            margin: 4px;
+            font-weight: bold;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .stButton>button:hover {
+            background-color: #00FFCC;
+            color: #111;
+            transform: scale(1.05);
+        }
+
+        .title {
+            text-align: center;
+            color: #00FFCC;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 0px 0px 10px #00FFCC;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Title ---
-st.markdown("<h1>🧮 Casio 911EX</h1>", unsafe_allow_html=True)
-st.caption("A premium Casio-style scientific calculator built with Streamlit")
+# --- Calculator UI ---
+st.markdown("<div class='calculator'>", unsafe_allow_html=True)
+st.markdown("<div class='title'>🧮 RETRO CALCULATOR</div>", unsafe_allow_html=True)
 
-# --- Session State ---
-if "exp" not in st.session_state:
-    st.session_state.exp = ""
+# --- Display Area ---
+if "expression" not in st.session_state:
+    st.session_state.expression = ""
 
-# --- Logic ---
-def press(key):
-    if key == "C":
-        st.session_state.exp = ""
-    elif key == "=":
-        try:
-            allowed = {k: v for k, v in math.__dict__.items()}
-            allowed.update({
-                "pi": math.pi,
-                "e": math.e,
-                "sin": lambda x: math.sin(math.radians(x)),
-                "cos": lambda x: math.cos(math.radians(x)),
-                "tan": lambda x: math.tan(math.radians(x)),
-                "log": math.log10,
-                "ln": math.log,
-                "sqrt": math.sqrt,
-                "pow": pow,
-                "abs": abs
-            })
-            st.session_state.exp = str(eval(st.session_state.exp, {"__builtins__": {}}, allowed))
-        except Exception:
-            st.session_state.exp = "Error"
-    else:
-        st.session_state.exp += str(key)
+display = st.session_state.expression if st.session_state.expression else "0"
+st.markdown(f"<div class='display'>{display}</div>", unsafe_allow_html=True)
 
-# --- UI ---
-st.markdown('<div class="calc-container">', unsafe_allow_html=True)
-st.markdown(f'<div class="display">{st.session_state.exp}</div>', unsafe_allow_html=True)
-
-layout = [
-    ["sin(", "cos(", "tan(", "log(", "ln("],
-    ["7", "8", "9", "/", "sqrt("],
-    ["4", "5", "6", "*", "pow("],
-    ["1", "2", "3", "-", "pi"],
-    ["0", ".", "(", ")", "+"],
-    ["C", "e", "abs(", "=", ""]
+# --- Button Layout ---
+buttons = [
+    ["7", "8", "9", "/"],
+    ["4", "5", "6", "*"],
+    ["1", "2", "3", "-"],
+    ["0", ".", "=", "+"],
+    ["sin", "cos", "tan", "sqrt"],
+    ["log", "ln", "(", ")"],
+    ["C", "DEL", "π", "x²"]
 ]
 
-for row in layout:
-    cols = st.columns(5, gap="small")
+for row in buttons:
+    cols = st.columns(4)
     for i, key in enumerate(row):
-        if key:
-            # Color-code buttons
-            if key in ["0","1","2","3","4","5","6","7","8","9",".","(",")","pi","e"]:
-                btn_class = "number-btn"
-            elif key in ["sin(","cos(","tan(","log(","ln(","sqrt(","pow(","abs("]:
-                btn_class = "func-btn"
-            elif key in ["+","-","*","/"]:
-                btn_class = "op-btn"
+        if cols[i].button(key):
+            if key == "C":
+                st.session_state.expression = ""
+            elif key == "DEL":
+                st.session_state.expression = st.session_state.expression[:-1]
             elif key == "=":
-                btn_class = "equal-btn"
-            elif key == "C":
-                btn_class = "clear-btn"
+                try:
+                    expr = st.session_state.expression.replace("π", str(math.pi))
+                    expr = expr.replace("^", "**")
+                    expr = expr.replace("x²", "**2")
+                    expr = expr.replace("sin", "math.sin")
+                    expr = expr.replace("cos", "math.cos")
+                    expr = expr.replace("tan", "math.tan")
+                    expr = expr.replace("sqrt", "math.sqrt")
+                    expr = expr.replace("log", "math.log10")
+                    expr = expr.replace("ln", "math.log")
+
+                    result = eval(expr)
+                    st.session_state.expression = str(round(result, 6))
+                except Exception:
+                    st.session_state.expression = "Error"
+            elif key == "x²":
+                st.session_state.expression += "**2"
             else:
-                btn_class = "number-btn"
+                st.session_state.expression += key
 
-            with cols[i]:
-                st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
-                st.button(key, on_click=press, args=(key,))
-                st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
-st.caption("✨ Designed by Ojas | Looks like Casio | Built with ❤️ in Streamlit")
+st.markdown("</div>", unsafe_allow_html=True)
+st.caption("👾 Inspired by retro Casio fx-911 | Built with ❤️ using Streamlit")
