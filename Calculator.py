@@ -1,8 +1,3 @@
-normal-calculator/
-│
-├── app.py
-├── requirements.txt
-└── README.md
 
 import streamlit as st
 
