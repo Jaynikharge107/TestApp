@@ -1,63 +1,58 @@
 import streamlit as st
 import math
+import base64
 
-# --- Streamlit Page Config ---
-st.set_page_config(page_title="Scientific Calculator | Streamlit", page_icon="🧮", layout="centered")
+# --- Streamlit Page Setup ---
+st.set_page_config(page_title="Scientific Calculator", page_icon="🧮", layout="centered")
+
+# --- Sound Effect (embedded base64 beep) ---
+beep_sound = """
+data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=
+"""
 
 # --- Custom Styling ---
 st.markdown("""
     <style>
-        /* Background */
         [data-testid="stAppViewContainer"] {
-            background: radial-gradient(circle at top, #101820 0%, #0a0a0a 100%);
+            background: linear-gradient(160deg, #f2f8f8 0%, #d7f0f0 100%);
         }
-        [data-testid="stHeader"], [data-testid="stToolbar"] {
-            display: none;
-        }
-
-        /* Calculator Box */
+        [data-testid="stHeader"], [data-testid="stToolbar"] {display: none;}
+        
         .calculator {
             width: 380px;
-            margin: 60px auto;
-            background-color: #1c1c1c;
-            border: 2px solid #00FFF0;
+            margin: 50px auto;
+            background-color: #ffffff;
+            border: 2px solid #00a6a6;
             border-radius: 20px;
             padding: 20px;
-            box-shadow: 0 0 25px #00FFF055;
+            box-shadow: 0 0 25px #00a6a655;
         }
-
-        /* Title */
         .title {
             text-align: center;
-            color: #00FFF0;
+            color: #006d77;
             font-size: 26px;
             font-weight: 700;
-            margin-bottom: 15px;
-            text-shadow: 0px 0px 8px #00FFF0AA;
+            margin-bottom: 10px;
             font-family: 'Orbitron', sans-serif;
         }
-
-        /* Display */
         .display-box {
-            background: linear-gradient(180deg, #0f1e13, #1c2a20);
-            color: #9CFF9C;
-            border: 2px solid #00FFCC;
+            background: #e9f7f7;
+            color: #004d40;
+            border: 2px solid #00a6a6;
             border-radius: 8px;
             font-size: 26px;
             text-align: right;
             padding: 14px;
             margin-bottom: 20px;
             font-weight: bold;
-            letter-spacing: 1.5px;
-            box-shadow: inset 0 0 8px #00FFCC55;
+            letter-spacing: 1.2px;
+            box-shadow: inset 0 0 8px #00a6a655;
             height: 50px;
         }
-
-        /* Input box */
         input[type="text"] {
             background-color: transparent;
             border: none;
-            color: #9CFF9C;
+            color: #004d40;
             width: 100%;
             height: 100%;
             font-size: 26px;
@@ -65,56 +60,55 @@ st.markdown("""
             text-align: right;
             font-family: 'Courier New', monospace;
         }
-
-        /* Buttons */
         .stButton>button {
-            background-color: #111;
-            color: #00FFD5;
-            border: 1px solid #00FFD5;
+            background-color: #f4ffff;
+            color: #007f7f;
+            border: 1.5px solid #00a6a6;
             border-radius: 8px;
             font-size: 18px;
             height: 58px;
             width: 75px;
             margin: 5px;
             font-weight: bold;
-            transition: all 0.15s ease-in-out;
+            transition: all 0.2s ease-in-out;
         }
-
         .stButton>button:hover {
-            background-color: #00FFD5;
-            color: #111;
-            transform: scale(1.05);
-            box-shadow: 0 0 15px #00FFD5AA;
+            background-color: #00a6a6;
+            color: #ffffff;
+            transform: scale(1.07);
+            box-shadow: 0 0 10px #00a6a655;
         }
-
-        /* Footer */
         .footer {
             text-align: center;
             margin-top: 20px;
-            color: #00FFD599;
+            color: #008b8b;
             font-size: 13px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# --- Calculator UI Container ---
+# --- Calculator Container ---
 st.markdown("<div class='calculator'>", unsafe_allow_html=True)
 st.markdown("<div class='title'>🧮 STREAMLIT SCIENTIFIC CALCULATOR</div>", unsafe_allow_html=True)
 
-# --- Initialize Session State ---
+# --- Session State ---
 if "expression" not in st.session_state:
     st.session_state.expression = ""
 
-# --- Input Display ---
+# --- Input Display (Keyboard Support) ---
 expression = st.text_input(
     label="",
     value=st.session_state.expression,
     key="input_box",
-    placeholder="Enter expression (use keyboard or buttons)...",
+    placeholder="Type here or use buttons...",
 )
 
-# --- Update Expression ---
 st.session_state.expression = expression
+
+# --- Beep function ---
+def play_beep():
+    sound_html = f'<audio autoplay><source src="{beep_sound}" type="audio/wav"></audio>'
+    st.markdown(sound_html, unsafe_allow_html=True)
 
 # --- Button Layout ---
 buttons = [
@@ -131,6 +125,7 @@ for row in buttons:
     cols = st.columns(4)
     for i, key in enumerate(row):
         if cols[i].button(key):
+            play_beep()  # play click sound
             if key == "C":
                 st.session_state.expression = ""
             elif key == "DEL":
@@ -157,4 +152,4 @@ for row in buttons:
                 st.session_state.expression += key
 
 st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("<div class='footer'>✨ Built with ❤️ in Streamlit | Perfect for LinkedIn showcase</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>✨ Built with ❤️ using Streamlit | Ideal for LinkedIn & GitHub Showcase</div>", unsafe_allow_html=True)
