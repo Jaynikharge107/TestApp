@@ -1,119 +1,121 @@
 import streamlit as st
 import math
 
-# --- Page Config ---
-st.set_page_config(page_title="Casio 911 - Scientific Calculator", page_icon="🧮", layout="centered")
+# --- Page Setup ---
+st.set_page_config(page_title="Casio 911EX - Scientific Calculator", page_icon="🧮", layout="centered")
 
-# --- Custom CSS for Casio-like style ---
+# --- Custom CSS ---
 st.markdown("""
     <style>
     .stApp {
-        background-color: #1c1c1c;
-        color: white;
-        text-align: center;
+        background: radial-gradient(circle at 20% 20%, #1f1f1f, #000000);
+        color: #fff;
+        font-family: 'Poppins', sans-serif;
     }
-    .calculator {
-        background-color: #2b2b2b;
-        border-radius: 15px;
-        width: 340px;
-        margin: 0 auto;
-        padding: 15px;
-        box-shadow: 0px 0px 15px rgba(255,255,255,0.1);
+    .calc-container {
+        max-width: 420px;
+        background: linear-gradient(145deg, #2c2c2c, #1b1b1b);
+        border-radius: 25px;
+        margin: 40px auto;
+        padding: 20px 25px 30px;
+        box-shadow: 10px 10px 20px #0a0a0a, -5px -5px 15px #2a2a2a;
     }
     .display {
-        background-color: #d4e0d7;
-        color: black;
-        text-align: right;
+        background: #cde0cc;
+        color: #000;
         font-size: 28px;
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 10px;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 20px;
+        text-align: right;
         font-family: 'Courier New', monospace;
+        box-shadow: inset 2px 2px 8px #9fa9a3;
         overflow-x: auto;
     }
-    .button {
-        width: 70px;
-        height: 50px;
-        margin: 4px;
-        border: none;
-        border-radius: 8px;
-        font-size: 18px;
-        background-color: #3b3b3b;
-        color: white;
-        transition: all 0.1s ease-in-out;
+    button[data-baseweb="button"] {
+        border-radius: 10px !important;
+        height: 60px !important;
+        font-size: 18px !important;
+        font-weight: 600 !important;
+        background-color: #292929 !important;
+        color: white !important;
+        border: 1px solid #3a3a3a !important;
+        transition: 0.1s ease-in-out;
     }
-    .button:hover {
-        background-color: #5a5a5a;
+    button[data-baseweb="button"]:hover {
+        background-color: #3a3a3a !important;
+        border: 1px solid #5c5c5c !important;
     }
-    .equal {
-        background-color: #0096FF !important;
+    .equal-btn button[data-baseweb="button"] {
+        background-color: #0078FF !important;
+        color: white !important;
     }
-    .clear {
-        background-color: #FF4C4C !important;
+    .clear-btn button[data-baseweb="button"] {
+        background-color: #E53935 !important;
+    }
+    h1 {
+        text-align: center;
+        color: #00BFFF;
+        margin-bottom: 0px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🧮 Casio 911EX - Scientific Calculator")
-st.caption("Interactive Casio-style scientific calculator built with Streamlit")
+st.markdown("<h1>🧮 Casio 911EX</h1>", unsafe_allow_html=True)
+st.caption("A modern, fully interactive Casio-style scientific calculator built with Streamlit")
 
-# --- Session State to hold input ---
-if "expression" not in st.session_state:
-    st.session_state.expression = ""
+# --- Session State ---
+if "exp" not in st.session_state:
+    st.session_state.exp = ""
 
-# --- Button Handler ---
-def press(btn):
-    if btn == "=":
+# --- Button Press Logic ---
+def press(key):
+    if key == "C":
+        st.session_state.exp = ""
+    elif key == "=":
         try:
-            # Allow math functions
-            allowed_names = {k: v for k, v in math.__dict__.items()}
-            allowed_names.update({
+            allowed = {k: v for k, v in math.__dict__.items()}
+            allowed.update({
                 "pi": math.pi,
                 "e": math.e,
                 "sin": lambda x: math.sin(math.radians(x)),
                 "cos": lambda x: math.cos(math.radians(x)),
                 "tan": lambda x: math.tan(math.radians(x)),
-                "sqrt": math.sqrt,
                 "log": math.log10,
                 "ln": math.log,
-                "abs": abs,
+                "sqrt": math.sqrt,
                 "pow": pow,
+                "abs": abs
             })
-            result = eval(st.session_state.expression, {"__builtins__": {}}, allowed_names)
-            st.session_state.expression = str(result)
+            st.session_state.exp = str(eval(st.session_state.exp, {"__builtins__": {}}, allowed))
         except Exception:
-            st.session_state.expression = "Error"
-    elif btn == "C":
-        st.session_state.expression = ""
+            st.session_state.exp = "Error"
     else:
-        st.session_state.expression += str(btn)
+        st.session_state.exp += str(key)
 
-# --- Calculator Layout ---
-st.markdown('<div class="calculator">', unsafe_allow_html=True)
-st.markdown(f"<div class='display'>{st.session_state.expression}</div>", unsafe_allow_html=True)
+# --- Calculator UI ---
+st.markdown('<div class="calc-container">', unsafe_allow_html=True)
+st.markdown(f'<div class="display">{st.session_state.exp}</div>', unsafe_allow_html=True)
 
-# --- Buttons Layout ---
-cols = st.columns(5)
-buttons = [
-    ["7", "8", "9", "/", "C"],
-    ["4", "5", "6", "*", "sqrt("],
-    ["1", "2", "3", "-", "pow("],
-    ["0", ".", "(", ")", "+"],
+layout = [
     ["sin(", "cos(", "tan(", "log(", "ln("],
-    ["pi", "e", "abs(", "=", ""],
+    ["7", "8", "9", "/", "sqrt("],
+    ["4", "5", "6", "*", "pow("],
+    ["1", "2", "3", "-", "pi"],
+    ["0", ".", "(", ")", "+"],
+    ["C", "e", "abs(", "=", ""]
 ]
 
-for row in buttons:
-    cols = st.columns(5)
-    for i, btn in enumerate(row):
-        if btn:
-            if btn == "=":
-                cols[i].button(btn, key=btn, on_click=press, args=(btn,), help="Evaluate", use_container_width=True)
-            elif btn == "C":
-                cols[i].button(btn, key=btn, on_click=press, args=(btn,), help="Clear", use_container_width=True)
-            else:
-                cols[i].button(btn, key=btn, on_click=press, args=(btn,), use_container_width=True)
+for row in layout:
+    cols = st.columns(5, gap="small")
+    for i, key in enumerate(row):
+        if key:
+            btn_class = "equal-btn" if key == "=" else "clear-btn" if key == "C" else ""
+            with cols[i]:
+                st.markdown(f'<div class="{btn_class}">', unsafe_allow_html=True)
+                st.button(key, on_click=press, args=(key,))
+                st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
-st.caption("Made with ❤️ by Ojas | Casio-style Calculator | Streamlit")
+st.caption("✨ Designed by Ojas | Built with ❤️ in Streamlit")
