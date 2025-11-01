@@ -7,68 +7,90 @@ st.set_page_config(page_title="Retro Scientific Calculator", page_icon="🧮", l
 # --- Custom Retro CSS ---
 st.markdown("""
     <style>
-        body {
-            background-color: #1e1e1e;
-            color: #00FFCC;
+        /* Background */
+        [data-testid="stAppViewContainer"] {
+            background-color: #121212;
+        }
+        [data-testid="stHeader"] {
+            background: none;
+        }
+        [data-testid="stToolbar"] {
+            display: none;
+        }
+
+        /* Main calculator box */
+        .calculator {
+            width: 340px;
+            margin: 40px auto;
+            background-color: #1a1a1a;
+            border: 3px solid #00FFF0;
+            border-radius: 18px;
+            padding: 15px;
+            box-shadow: 0 0 25px #00FFF033;
+        }
+
+        /* Title */
+        .title {
+            text-align: center;
+            color: #00FFF0;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            letter-spacing: 1px;
+            text-shadow: 0px 0px 12px #00FFFF, 0px 0px 20px #00FFFF66;
             font-family: 'Courier New', monospace;
         }
 
-        .calculator {
-            width: 320px;
-            margin: 50px auto;
-            background-color: #2c2c2c;
-            border: 3px solid #00FFCC;
-            border-radius: 15px;
-            padding: 15px;
-            box-shadow: 0 0 30px #00FFCC66;
-        }
-
+        /* Display */
         .display {
-            background-color: #0d0d0d;
-            color: #00FF66;
+            background: linear-gradient(180deg, #0f1e13, #1c2a20);
+            color: #9CFF9C;
             border: 2px solid #00FFCC;
-            border-radius: 5px;
+            border-radius: 6px;
             font-size: 28px;
             text-align: right;
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 20px;
             font-weight: bold;
-            letter-spacing: 2px;
+            letter-spacing: 1.5px;
+            box-shadow: inset 0 0 8px #00FFCC55;
         }
 
+        /* Buttons */
         .stButton>button {
             background-color: #111;
-            color: #00FFCC;
-            border: 1px solid #00FFCC;
-            border-radius: 8px;
+            color: #00FFD5;
+            border: 1px solid #00FFD5;
+            border-radius: 10px;
             font-size: 18px;
-            height: 55px;
-            width: 70px;
-            margin: 4px;
+            height: 58px;
+            width: 75px;
+            margin: 5px;
             font-weight: bold;
-            transition: all 0.2s ease-in-out;
+            font-family: 'Courier New', monospace;
+            transition: all 0.15s ease-in-out;
         }
 
         .stButton>button:hover {
-            background-color: #00FFCC;
+            background-color: #00FFD5;
             color: #111;
-            transform: scale(1.05);
+            transform: scale(1.07);
+            box-shadow: 0 0 15px #00FFD5AA;
         }
 
-        .title {
+        /* Footer */
+        .footer {
             text-align: center;
-            color: #00FFCC;
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            text-shadow: 0px 0px 10px #00FFCC;
+            margin-top: 20px;
+            color: #00FFD5AA;
+            font-size: 13px;
         }
     </style>
 """, unsafe_allow_html=True)
 
 # --- Calculator UI ---
 st.markdown("<div class='calculator'>", unsafe_allow_html=True)
-st.markdown("<div class='title'>🧮 RETRO CALCULATOR</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>🧮 RETRO CASIO CALCULATOR</div>", unsafe_allow_html=True)
 
 # --- Display Area ---
 if "expression" not in st.session_state:
@@ -118,4 +140,4 @@ for row in buttons:
                 st.session_state.expression += key
 
 st.markdown("</div>", unsafe_allow_html=True)
-st.caption("👾 Inspired by retro Casio fx-911 | Built with ❤️ using Streamlit")
+st.markdown("<div class='footer'>👾 Inspired by Casio fx-911 | Built with ❤️ using Streamlit</div>", unsafe_allow_html=True)
