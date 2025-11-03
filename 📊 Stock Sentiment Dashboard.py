@@ -1,4 +1,4 @@
-# indian_stock_dashboard.py
+# indian_stock_dashboard_full.py
 
 import streamlit as st
 import yfinance as yf
@@ -7,8 +7,6 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from prophet import Prophet
 from prophet.plot import plot_plotly
 import plotly.express as px
-import requests
-import datetime
 
 # ---------------- Streamlit Config ----------------
 st.set_page_config(page_title="🇮🇳 Indian Stock Dashboard", page_icon="📈", layout="wide")
@@ -18,14 +16,24 @@ st.write("Overview of all NSE stocks with optional company search, news sentimen
 # ---------------- Initialize Sentiment Analyzer ----------------
 analyzer = SentimentIntensityAnalyzer()
 
-# ---------------- Load NSE Stock Symbols ----------------
-# For demonstration, using top NSE symbols; in real project, download NSE listed companies CSV
-nse_stocks = [
-    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
-    "HINDUNILVR.NS", "KOTAKBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS"
-]
+# ---------------- Load NSE Symbol CSV ----------------
+# Make sure your CSV has 'Symbol' and 'Company Name' columns
+df_nse = pd.read_csv("nse_stocks.csv")
+df_nse.dropna(subset=['Symbol'], inplace=True)  # Drop rows without symbol
+df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
 
-# ---------------- Fetch Stock Prices ----------------
+# ---------------- Dropdown for Company Search ----------------
+st.subheader("🔍 Search a Company")
+company_list = df_nse['Company Name'].tolist()
+selected_company = st.selectbox("Select Company:", company_list)
+
+# Map to symbol
+selected_symbol = df_nse[df_nse['Company Name'] == selected_company]['Symbol'].values[0]
+
+# ---------------- Fetch Stock Data for Overview ----------------
+# For performance, show top 50 NSE stocks (can be customized)
+overview_symbols = df_nse['Symbol'].head(50).tolist()
+
 def fetch_stock_data(symbols):
     data_list = []
     for symbol in symbols:
@@ -36,7 +44,7 @@ def fetch_stock_data(symbols):
                 continue
             last_close = hist['Close'][-1]
             prev_close = hist['Close'][-2]
-            pct_change = ((last_close - prev_close) / prev_close) * 100
+            pct_change = ((last_close - prev_close)/prev_close)*100
             data_list.append({
                 "Stock": symbol,
                 "Price (₹)": round(last_close,2),
@@ -46,18 +54,23 @@ def fetch_stock_data(symbols):
             continue
     return pd.DataFrame(data_list)
 
-df_overview = fetch_stock_data(nse_stocks)
+df_overview = fetch_stock_data(overview_symbols)
 
 # ---------------- Display Top Gainers / Losers ----------------
 if not df_overview.empty:
-    st.subheader("📈 Top Gainers & Losers (NSE)")
-    top_gainers = df_overview.sort_values("% Change", ascending=False).head(5)
-    top_losers = df_overview.sort_values("% Change").head(5)
+    st.subheader("📈 Top Gainers & Losers (NSE Overview)")
+    top_gainers = df_overview.sort_values("% Change", ascending=False).head(5).reset_index(drop=True)
+    top_losers = df_overview.sort_values("% Change").head(5).reset_index(drop=True)
+    top_gainers.index += 1
+    top_losers.index += 1
 
     st.markdown("**Top Gainers**")
-    st.dataframe(top_gainers.style.applymap(lambda x: 'color: green;' if isinstance(x, float) else '', subset=["% Change"]))
+    st.dataframe(top_gainers.style.format({"Price (₹)": "{:.2f}", "% Change": "{:.2f}"})
+                 .applymap(lambda x: 'color: green;' if isinstance(x, float) else '', subset=["% Change"]))
+    
     st.markdown("**Top Losers**")
-    st.dataframe(top_losers.style.applymap(lambda x: 'color: red;' if isinstance(x, float) else '', subset=["% Change"]))
+    st.dataframe(top_losers.style.format({"Price (₹)": "{:.2f}", "% Change": "{:.2f}"})
+                 .applymap(lambda x: 'color: red;' if isinstance(x, float) else '', subset=["% Change"]))
 
     # ---------------- Heatmap ----------------
     st.subheader("🌡️ Stock Performance Heatmap")
@@ -66,57 +79,55 @@ if not df_overview.empty:
                      hover_data=["Price (₹)"], size_max=40)
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------------- Optional Company Search ----------------
-search_stock = st.text_input("🔍 Search any NSE stock symbol (Optional)").upper().strip()
-if search_stock:
-    try:
-        ticker = yf.Ticker(search_stock)
-        hist = ticker.history(period="1y")  # 1 year historical
-        if hist.empty:
-            st.error("Stock symbol not found or no data available.")
+# ---------------- Fetch Data for Selected Company ----------------
+try:
+    ticker = yf.Ticker(selected_symbol)
+    hist = ticker.history(period="1y")  # 1 year historical
+    if hist.empty:
+        st.error("No historical data available for this stock.")
+    else:
+        last_close = round(hist['Close'][-1],2)
+        pct_change = round(((last_close - hist['Close'][-2])/hist['Close'][-2])*100,2)
+
+        st.subheader(f"📌 {selected_company} ({selected_symbol}) Details")
+        st.metric("Current Price (₹)", last_close)
+        st.metric("% Change", pct_change)
+
+        # ---------------- Latest News & Sentiment (Placeholder) ----------------
+        st.subheader("📰 Latest News & Sentiment")
+        news_headlines = [
+            f"{selected_company} shows strong growth potential",
+            f"Investors are cautious about {selected_company} short term",
+            f"{selected_company} announces new strategic partnership",
+            f"{selected_company} stock underperforms analyst expectations"
+        ]
+        sentiment_scores = [analyzer.polarity_scores(h)["compound"] for h in news_headlines]
+        avg_sentiment = round(sum(sentiment_scores)/len(sentiment_scores),2) if sentiment_scores else 0
+        if avg_sentiment > 0.2:
+            label = "Bullish"
+        elif avg_sentiment < -0.2:
+            label = "Bearish"
         else:
-            last_close = hist['Close'][-1]
-            st.subheader(f"📌 {search_stock} Details")
-            st.metric("Current Price (₹)", round(last_close,2))
-            pct_change = ((last_close - hist['Close'][-2]) / hist['Close'][-2]) * 100
-            st.metric("% Change", round(pct_change,2))
+            label = "Neutral"
+        st.metric("Average Sentiment", avg_sentiment, delta=label)
 
-            # ---------------- Latest News (Placeholder, replace with NewsAPI) ----------------
-            st.subheader("📰 Latest News & Sentiment")
-            news_headlines = [
-                f"{search_stock} shows strong growth potential",
-                f"Investors are cautious about {search_stock} short term",
-                f"{search_stock} announces new strategic partnership",
-                f"{search_stock} stock underperforms analyst expectations"
-            ]
-            sentiment_scores = [analyzer.polarity_scores(h)["compound"] for h in news_headlines]
-            avg_sentiment = sum(sentiment_scores)/len(sentiment_scores) if sentiment_scores else 0
-            if avg_sentiment > 0.2:
-                label = "Bullish"
-            elif avg_sentiment < -0.2:
-                label = "Bearish"
-            else:
-                label = "Neutral"
-            st.metric("Average Sentiment", round(avg_sentiment,2), delta=label)
-            st.write("**Top Headlines:**")
-            for h in news_headlines:
-                st.write(f"- {h}")
+        st.write("**Top Headlines:**")
+        for h in news_headlines:
+            st.write(f"- {h}")
 
-            # ---------------- Trend Prediction ----------------
-            st.subheader("📊 Trend Prediction (Next 30 Days)")
-            df_prophet = hist.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
-            model = Prophet(daily_seasonality=True)
-            model.fit(df_prophet)
-            future = model.make_future_dataframe(periods=30)
-            forecast = model.predict(future)
-            fig2 = plot_plotly(model, forecast)
-            st.plotly_chart(fig2, use_container_width=True)
+        # ---------------- Trend Prediction ----------------
+        st.subheader("📊 Trend Prediction (Next 30 Days)")
+        df_prophet = hist.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
+        model = Prophet(daily_seasonality=True)
+        model.fit(df_prophet)
+        future = model.make_future_dataframe(periods=30)
+        forecast = model.predict(future)
+        fig2 = plot_plotly(model, forecast)
+        st.plotly_chart(fig2, use_container_width=True)
 
-    except Exception as e:
-        st.error(f"Error fetching data for {search_stock}: {e}")
-else:
-    st.info("Optional: Enter a stock symbol above to see detailed analysis, news sentiment, and trend prediction.")
+except Exception as e:
+    st.error(f"Error fetching data for {selected_company}: {e}")
 
 # ---------------- Footer ----------------
 st.markdown("---")
-st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Trend prediction uses Prophet.")
+st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Trend prediction uses Prophet. Prices in INR.")
