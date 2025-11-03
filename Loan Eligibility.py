@@ -9,7 +9,7 @@ st.write("Check your monthly savings, loan eligibility & EMI based on your finan
 # Reset button
 if st.button("🔄 Reset All Data"):
     st.session_state.expenses = []
-    st.experimental_rerun()
+    st.rerun()
 
 # Income input
 Income = st.number_input("💵 Monthly Income (In-Hand)", min_value=0, step=500)
