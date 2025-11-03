@@ -1,4 +1,4 @@
-# indian_stock_dashboard_full.py
+# indian_stock_dashboard_main.py
 
 import streamlit as st
 import yfinance as yf
@@ -7,32 +7,38 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from prophet import Prophet
 from prophet.plot import plot_plotly
 import plotly.express as px
+import os
 
 # ---------------- Streamlit Config ----------------
 st.set_page_config(page_title="🇮🇳 Indian Stock Dashboard", page_icon="📈", layout="wide")
 st.title("🇮🇳 Indian Stock Market Dashboard")
-st.write("Overview of all NSE stocks with optional company search, news sentiment, and trend prediction.")
+st.write("Overview of NSE stocks with optional company search, news sentiment, and trend prediction.")
 
 # ---------------- Initialize Sentiment Analyzer ----------------
 analyzer = SentimentIntensityAnalyzer()
 
-# ---------------- Load NSE Symbol CSV ----------------
-# Make sure your CSV has 'Symbol' and 'Company Name' columns
-df_nse = pd.read_csv("nse_stocks.csv")
-df_nse.dropna(subset=['Symbol'], inplace=True)  # Drop rows without symbol
-df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
+# ---------------- Load NSE CSV ----------------
+try:
+    # CSV in main folder
+    script_dir = os.getcwd()  # Current working directory
+    csv_path = os.path.join(script_dir, "nse_stocks.csv")
+    df_nse = pd.read_csv(csv_path)
+    df_nse.dropna(subset=['Symbol'], inplace=True)
+    df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
+
+    st.success(f"NSE symbols loaded successfully! Total stocks: {len(df_nse)}")
+except FileNotFoundError:
+    st.error("nse_stocks.csv not found in the main folder! Please upload it.")
+    st.stop()
 
 # ---------------- Dropdown for Company Search ----------------
 st.subheader("🔍 Search a Company")
 company_list = df_nse['Company Name'].tolist()
 selected_company = st.selectbox("Select Company:", company_list)
-
-# Map to symbol
 selected_symbol = df_nse[df_nse['Company Name'] == selected_company]['Symbol'].values[0]
 
-# ---------------- Fetch Stock Data for Overview ----------------
-# For performance, show top 50 NSE stocks (can be customized)
-overview_symbols = df_nse['Symbol'].head(50).tolist()
+# ---------------- Fetch Overview Data ----------------
+overview_symbols = df_nse['Symbol'].head(50).tolist()  # Limit for performance
 
 def fetch_stock_data(symbols):
     data_list = []
@@ -67,22 +73,22 @@ if not df_overview.empty:
     st.markdown("**Top Gainers**")
     st.dataframe(top_gainers.style.format({"Price (₹)": "{:.2f}", "% Change": "{:.2f}"})
                  .applymap(lambda x: 'color: green;' if isinstance(x, float) else '', subset=["% Change"]))
-    
+
     st.markdown("**Top Losers**")
     st.dataframe(top_losers.style.format({"Price (₹)": "{:.2f}", "% Change": "{:.2f}"})
                  .applymap(lambda x: 'color: red;' if isinstance(x, float) else '', subset=["% Change"]))
 
-    # ---------------- Heatmap ----------------
+    # Heatmap
     st.subheader("🌡️ Stock Performance Heatmap")
     fig = px.scatter(df_overview, x="Stock", y="% Change", size="Price (₹)",
                      color="% Change", color_continuous_scale="RdYlGn",
                      hover_data=["Price (₹)"], size_max=40)
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------------- Fetch Data for Selected Company ----------------
+# ---------------- Selected Company Analysis ----------------
 try:
     ticker = yf.Ticker(selected_symbol)
-    hist = ticker.history(period="1y")  # 1 year historical
+    hist = ticker.history(period="1y")
     if hist.empty:
         st.error("No historical data available for this stock.")
     else:
@@ -93,7 +99,7 @@ try:
         st.metric("Current Price (₹)", last_close)
         st.metric("% Change", pct_change)
 
-        # ---------------- Latest News & Sentiment (Placeholder) ----------------
+        # News + Sentiment (placeholder)
         st.subheader("📰 Latest News & Sentiment")
         news_headlines = [
             f"{selected_company} shows strong growth potential",
@@ -103,19 +109,14 @@ try:
         ]
         sentiment_scores = [analyzer.polarity_scores(h)["compound"] for h in news_headlines]
         avg_sentiment = round(sum(sentiment_scores)/len(sentiment_scores),2) if sentiment_scores else 0
-        if avg_sentiment > 0.2:
-            label = "Bullish"
-        elif avg_sentiment < -0.2:
-            label = "Bearish"
-        else:
-            label = "Neutral"
+        label = "Bullish" if avg_sentiment>0.2 else ("Bearish" if avg_sentiment<-0.2 else "Neutral")
         st.metric("Average Sentiment", avg_sentiment, delta=label)
 
         st.write("**Top Headlines:**")
         for h in news_headlines:
             st.write(f"- {h}")
 
-        # ---------------- Trend Prediction ----------------
+        # Trend Prediction
         st.subheader("📊 Trend Prediction (Next 30 Days)")
         df_prophet = hist.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
         model = Prophet(daily_seasonality=True)
@@ -128,6 +129,6 @@ try:
 except Exception as e:
     st.error(f"Error fetching data for {selected_company}: {e}")
 
-# ---------------- Footer ----------------
+# Footer
 st.markdown("---")
 st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Trend prediction uses Prophet. Prices in INR.")
