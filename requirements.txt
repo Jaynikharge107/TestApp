@@ -1,6 +1,6 @@
-streamlit
-yfinance
-pandas
-vaderSentiment
-prophet
-plotly
+streamlit>=1.25.0
+pandas>=2.1.0
+yfinance>=0.2.27
+vaderSentiment>=3.3.2
+plotly>=5.20.0
+numpy>=1.26.0
