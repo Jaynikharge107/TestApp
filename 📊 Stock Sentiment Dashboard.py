@@ -1,17 +1,15 @@
-# indian_stock_dashboard_error_free.py
+# indian_stock_dashboard_essential.py
 
 import streamlit as st
 import pandas as pd
 import yfinance as yf
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from prophet import Prophet
-from prophet.plot import plot_plotly
 import plotly.express as px
 
 # ---------------- Streamlit Config ----------------
 st.set_page_config(page_title="🇮🇳 Indian Stock Dashboard", page_icon="📈", layout="wide")
 st.title("🇮🇳 Indian Stock Market Dashboard")
-st.write("Overview of NSE stocks with optional company search, news sentiment, and trend prediction.")
+st.write("Overview of NSE stocks with optional company search, news sentiment, and essential stock insights.")
 
 # ---------------- Initialize Sentiment Analyzer ----------------
 analyzer = SentimentIntensityAnalyzer()
@@ -97,56 +95,44 @@ if not df_overview.empty:
 try:
     ticker = yf.Ticker(selected_symbol)
     hist = ticker.history(period="1y")
+    info = ticker.info
+
+    st.subheader(f"📌 {selected_company} ({selected_symbol}) Details")
+
+    st.metric("Current Price (₹)", round(info.get('regularMarketPrice',0),2))
+    st.metric("% Change", round(info.get('regularMarketChangePercent',0),2))
     
-    if hist.empty:
-        st.warning(f"No historical data for {selected_company}. Showing alternate insights.")
-        info = ticker.info
-        st.subheader(f"📌 {selected_company} ({selected_symbol}) Current Info")
-        st.metric("Current Price (₹)", round(info.get('previousClose',0),2))
-        st.metric("Market Cap (₹)", round(info.get('marketCap',0)/1e9,2))
-    else:
-        last_close = round(hist['Close'][-1],2)
-        pct_change = round(((last_close - hist['Close'][-2])/hist['Close'][-2])*100,2)
+    # Essential stock info
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("52-Week High", round(info.get('fiftyTwoWeekHigh',0),2))
+    col2.metric("52-Week Low", round(info.get('fiftyTwoWeekLow',0),2))
+    col3.metric("Market Cap (₹B)", round(info.get('marketCap',0)/1e9,2))
+    col4.metric("Volume", round(info.get('volume',0),2))
 
-        st.subheader(f"📌 {selected_company} ({selected_symbol}) Details")
-        st.metric("Current Price (₹)", last_close)
-        st.metric("% Change", pct_change)
+    col5, col6 = st.columns(2)
+    col5.metric("P/E Ratio", round(info.get('trailingPE',0),2))
+    col6.metric("Dividend Yield", round(info.get('dividendYield',0)*100 if info.get('dividendYield') else 0,2))
 
-        # News + Sentiment (placeholder)
-        st.subheader("📰 Latest News & Sentiment")
-        news_headlines = [
-            f"{selected_company} shows strong growth potential",
-            f"Investors are cautious about {selected_company} short term",
-            f"{selected_company} announces new strategic partnership",
-            f"{selected_company} stock underperforms analyst expectations"
-        ]
-        sentiment_scores = [analyzer.polarity_scores(h)["compound"] for h in news_headlines]
-        avg_sentiment = round(sum(sentiment_scores)/len(sentiment_scores),2) if sentiment_scores else 0
-        label = "Bullish" if avg_sentiment>0.2 else ("Bearish" if avg_sentiment<-0.2 else "Neutral")
-        st.metric("Average Sentiment", avg_sentiment, delta=label)
+    # News + Sentiment (placeholder)
+    st.subheader("📰 Latest News & Sentiment")
+    news_headlines = [
+        f"{selected_company} shows strong growth potential",
+        f"Investors are cautious about {selected_company} short term",
+        f"{selected_company} announces new strategic partnership",
+        f"{selected_company} stock underperforms analyst expectations"
+    ]
+    sentiment_scores = [analyzer.polarity_scores(h)["compound"] for h in news_headlines]
+    avg_sentiment = round(sum(sentiment_scores)/len(sentiment_scores),2) if sentiment_scores else 0
+    label = "Bullish" if avg_sentiment>0.2 else ("Bearish" if avg_sentiment<-0.2 else "Neutral")
+    st.metric("Average Sentiment", avg_sentiment, delta=label)
 
-        st.write("**Top Headlines:**")
-        for h in news_headlines:
-            st.write(f"- {h}")
-
-        # Trend Prediction
-        st.subheader("📊 Trend Prediction (Next 30 Days)")
-        df_prophet = hist.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
-        # Remove timezone robustly
-        df_prophet['ds'] = pd.to_datetime(df_prophet['ds']).dt.tz_localize(None)
-        df_prophet = df_prophet.dropna(subset=['y'])
-
-        model = Prophet(daily_seasonality=True)
-        model.fit(df_prophet)
-
-        future = model.make_future_dataframe(periods=30)
-        forecast = model.predict(future)
-        fig2 = plot_plotly(model, forecast)
-        st.plotly_chart(fig2, use_container_width=True)
+    st.write("**Top Headlines:**")
+    for h in news_headlines:
+        st.write(f"- {h}")
 
 except Exception as e:
     st.error(f"Error fetching data for {selected_company}: {e}")
 
 # ---------------- Footer ----------------
 st.markdown("---")
-st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Trend prediction uses Prophet. Prices in INR.")
+st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Prices in INR.")
