@@ -7,6 +7,7 @@ from forex_python.converter import CurrencyRates
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import plotly.express as px
 
+
 # --- Streamlit Page Config ---
 st.set_page_config(page_title="🌎 Global Stock Dashboard", page_icon="💹", layout="wide")
 st.title("🌎 Global Stock Market Dashboard (All Prices in ₹)")
