@@ -20,9 +20,7 @@ analyzer = SentimentIntensityAnalyzer()
 # ---------------- Load NSE CSV ----------------
 try:
     # CSV in main folder
-    script_dir = os.getcwd()  # Current working directory
-    csv_path = os.path.join(script_dir, "nse_stocks.csv")
-    df_nse = pd.read_csv(csv_path)
+    df_nse = pd.read_csv(nse_stocks.csv)
     df_nse.dropna(subset=['Symbol'], inplace=True)
     df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
 
