@@ -1,4 +1,4 @@
-# indian_stock_dashboard_essential.py
+# indian_stock_dashboard_essential_only.py
 
 import streamlit as st
 import pandas as pd
@@ -94,7 +94,6 @@ if not df_overview.empty:
 # ---------------- Selected Company Analysis ----------------
 try:
     ticker = yf.Ticker(selected_symbol)
-    hist = ticker.history(period="1y")
     info = ticker.info
 
     st.subheader(f"📌 {selected_company} ({selected_symbol}) Details")
