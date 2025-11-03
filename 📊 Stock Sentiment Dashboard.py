@@ -130,12 +130,25 @@ try:
         # Fix timezone issue
         df_prophet['ds'] = pd.to_datetime(df_prophet['ds']).dt.tz_localize(None)
 
-        model = Prophet(daily_seasonality=True)
-        model.fit(df_prophet)
-        future = model.make_future_dataframe(periods=30)
-        forecast = model.predict(future)
-        fig2 = plot_plotly(model, forecast)
-        st.plotly_chart(fig2, use_container_width=True)
+        # Prepare data for Prophet
+df_prophet = hist[['Close']].copy()
+df_prophet = df_prophet.reset_index()  # Move index (Date) to a column
+df_prophet = df_prophet.rename(columns={'Date':'ds','Close':'y'})
+
+# Remove timezone from 'ds' column (works even if it's from index)
+df_prophet['ds'] = pd.to_datetime(df_prophet['ds']).dt.tz_localize(None)
+
+# Fit Prophet model
+model = Prophet(daily_seasonality=True)
+model.fit(df_prophet)
+
+# Make future dataframe
+future = model.make_future_dataframe(periods=30)
+forecast = model.predict(future)
+
+# Plot
+fig2 = plot_plotly(model, forecast)
+st.plotly_chart(fig2, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error fetching data for {selected_company}: {e}")
