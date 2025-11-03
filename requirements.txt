@@ -1,6 +1,6 @@
 streamlit
 yfinance
 pandas
-forex-python
 vaderSentiment
+prophet
 plotly
