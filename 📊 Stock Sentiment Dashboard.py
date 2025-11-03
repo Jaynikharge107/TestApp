@@ -1,4 +1,4 @@
-# indian_stock_dashboard_final.py
+# indian_stock_dashboard_error_free.py
 
 import streamlit as st
 import pandas as pd
@@ -97,8 +97,13 @@ if not df_overview.empty:
 try:
     ticker = yf.Ticker(selected_symbol)
     hist = ticker.history(period="1y")
+    
     if hist.empty:
-        st.error("No historical data available for this stock.")
+        st.warning(f"No historical data for {selected_company}. Showing alternate insights.")
+        info = ticker.info
+        st.subheader(f"📌 {selected_company} ({selected_symbol}) Current Info")
+        st.metric("Current Price (₹)", round(info.get('previousClose',0),2))
+        st.metric("Market Cap (₹)", round(info.get('marketCap',0)/1e9,2))
     else:
         last_close = round(hist['Close'][-1],2)
         pct_change = round(((last_close - hist['Close'][-2])/hist['Close'][-2])*100,2)
@@ -127,28 +132,17 @@ try:
         # Trend Prediction
         st.subheader("📊 Trend Prediction (Next 30 Days)")
         df_prophet = hist.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
-        # Fix timezone issue
+        # Remove timezone robustly
         df_prophet['ds'] = pd.to_datetime(df_prophet['ds']).dt.tz_localize(None)
+        df_prophet = df_prophet.dropna(subset=['y'])
 
-        # Prepare data for Prophet
-df_prophet = hist[['Close']].copy()
-df_prophet = df_prophet.reset_index()  # Move index (Date) to a column
-df_prophet = df_prophet.rename(columns={'Date':'ds','Close':'y'})
+        model = Prophet(daily_seasonality=True)
+        model.fit(df_prophet)
 
-# Remove timezone from 'ds' column (works even if it's from index)
-df_prophet['ds'] = pd.to_datetime(df_prophet['ds']).dt.tz_localize(None)
-
-# Fit Prophet model
-model = Prophet(daily_seasonality=True)
-model.fit(df_prophet)
-
-# Make future dataframe
-future = model.make_future_dataframe(periods=30)
-forecast = model.predict(future)
-
-# Plot
-fig2 = plot_plotly(model, forecast)
-st.plotly_chart(fig2, use_container_width=True)
+        future = model.make_future_dataframe(periods=30)
+        forecast = model.predict(future)
+        fig2 = plot_plotly(model, forecast)
+        st.plotly_chart(fig2, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error fetching data for {selected_company}: {e}")
