@@ -1,155 +1,157 @@
-# indian_stock_dashboard_insights.py
-
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import plotly.express as px
-import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from GoogleNews import GoogleNews
 
-# ---------------- Streamlit Config ----------------
-st.set_page_config(page_title="🇮🇳 Indian Stock Dashboard", page_icon="📈", layout="wide")
-st.title("🇮🇳 Indian Stock Market Dashboard")
-st.write("Enhanced NSE stock insights with weekly/monthly changes and news sentiment.")
+st.set_page_config(page_title="Indian Stock Insights", layout="wide")
 
-# ---------------- Initialize Sentiment Analyzer ----------------
-analyzer = SentimentIntensityAnalyzer()
+# ----------------- LOAD NSE DATA -----------------
+@st.cache_data
+def load_nse_symbols():
+    df = pd.read_csv("nse_stocks.csv")
+    df.columns = df.columns.str.strip()
+    df['Ticker'] = df['Symbol'].astype(str).str.strip() + ".NS"
+    df['Company Name'] = df['Company Name'].astype(str).str.strip()
+    return df[['Ticker', 'Company Name']]
 
-# ---------------- File Upload / Load ----------------
-st.subheader("Upload NSE CSV (Optional if already in main folder)")
-uploaded_file = st.file_uploader("Choose your nse_stocks.csv", type=["csv"])
+nse_df = load_nse_symbols()
+ticker_list = nse_df['Ticker'].tolist()
+ticker_map = dict(zip(nse_df['Ticker'], nse_df['Company Name']))
 
-if uploaded_file is not None:
-    df_nse = pd.read_csv(uploaded_file)
-elif st.checkbox("Use CSV from main folder"):
-    try:
-        df_nse = pd.read_csv("nse_stocks.csv")
-    except FileNotFoundError:
-        st.error("CSV not found in main folder. Please upload it.")
-        st.stop()
-else:
-    st.warning("Please upload the CSV or enable the checkbox to use the main folder CSV.")
-    st.stop()
-
-# Clean column headers
-df_nse.columns = df_nse.columns.str.strip()
-df_nse.dropna(subset=['Symbol'], inplace=True)
-df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
-
-# ---------------- Dropdown for Company Search ----------------
-st.subheader("🔍 Search a Company")
-company_list = df_nse['Company Name'].tolist()
-selected_company = st.selectbox("Select Company:", company_list)
-selected_symbol = df_nse[df_nse['Company Name'] == selected_company]['Symbol'].values[0]
-
-# ---------------- Fetch Overview Data ----------------
-overview_symbols = df_nse['Symbol'].head(50).tolist()  # Limit for performance
-
-def fetch_stock_data(symbols):
-    data_list = []
-    for symbol in symbols:
+# ----------------- PRICE FETCHING -----------------
+@st.cache_data(ttl=60*10)
+def get_prices(tickers, period="1mo"):
+    data = yf.download(tickers, period=period, interval="1d", group_by="ticker", progress=False)
+    prices = {}
+    for t in tickers:
         try:
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="2d")
-            if len(hist) < 2:
-                continue
-            last_close = hist['Close'][-1]
-            prev_close = hist['Close'][-2]
-            pct_change = ((last_close - prev_close)/prev_close)*100
-            data_list.append({
-                "Stock": symbol,
-                "Price (₹)": round(last_close,2),
-                "% Change": round(pct_change,2)
-            })
-        except:
+            if isinstance(data.columns, pd.MultiIndex):
+                df = data[t].dropna()
+            else:
+                df = data
+            prices[t] = df
+        except KeyError:
             continue
-    return pd.DataFrame(data_list)
+    return prices
 
-df_overview = fetch_stock_data(overview_symbols)
+def calc_returns(df):
+    col = 'Adj Close' if 'Adj Close' in df.columns else 'Close'
+    return df[col].pct_change().dropna()
 
-# ---------------- Top Gainers / Losers ----------------
-if not df_overview.empty:
-    st.subheader("📈 Top Gainers & Losers (NSE Overview)")
-    top_gainers = df_overview.sort_values("% Change", ascending=False).head(5).reset_index(drop=True)
-    top_losers = df_overview.sort_values("% Change").head(5).reset_index(drop=True)
-    top_gainers.index += 1
-    top_losers.index += 1
+# ----------------- MOVERS -----------------
+def get_top_movers(days=30):
+    data = get_prices(ticker_list[:100], period=f"{days}d")  # limit to first 100 to keep fast
+    movers = []
+    for t, df in data.items():
+        if df.empty: continue
+        col = 'Adj Close' if 'Adj Close' in df.columns else 'Close'
+        start, end = df[col].iloc[0], df[col].iloc[-1]
+        change = (end - start) / start * 100
+        movers.append([t, ticker_map.get(t, ""), end, round(change, 2)])
+    df = pd.DataFrame(movers, columns=["Ticker", "Company", "Last Price", "% Change"])
+    return df.sort_values("% Change", ascending=False)
 
-    st.markdown("**Top Gainers**")
-    st.dataframe(top_gainers.style.format({"Price (₹)":"{:.2f}","% Change":"{:.2f}"})
-                 .applymap(lambda x: 'color: green;' if isinstance(x,float) else '', subset=["% Change"]))
+# ----------------- NEWS & SENTIMENT -----------------
+@st.cache_data(ttl=60*30)
+def fetch_news(company, limit=8):
+    googlenews = GoogleNews(period='7d')
+    googlenews.search(company)
+    return googlenews.result()[:limit]
 
-    st.markdown("**Top Losers**")
-    st.dataframe(top_losers.style.format({"Price (₹)":"{:.2f}","% Change":"{:.2f}"})
-                 .applymap(lambda x: 'color: red;' if isinstance(x,float) else '', subset=["% Change"]))
+def sentiment_summary(news_list):
+    analyzer = SentimentIntensityAnalyzer()
+    results = []
+    for n in news_list:
+        text = n.get('title') or ''
+        score = analyzer.polarity_scores(text)
+        results.append({"Headline": text, "Sentiment": score['compound']})
+    return pd.DataFrame(results)
 
-    # Heatmap
-    st.subheader("🌡️ Stock Performance Heatmap")
-    fig = px.scatter(df_overview, x="Stock", y="% Change", size="Price (₹)",
-                     color="% Change", color_continuous_scale="RdYlGn",
-                     hover_data=["Price (₹)"], size_max=40)
-    st.plotly_chart(fig, use_container_width=True)
+# ----------------- UI -----------------
+st.title("🇮🇳 Indian Stock Insights Dashboard")
 
-# ---------------- Selected Company Analysis ----------------
-try:
-    ticker = yf.Ticker(selected_symbol)
-    hist = ticker.history(period="60d")  # last 60 days for weekly/monthly change
-    info = ticker.info
+# --- Sidebar controls ---
+st.sidebar.header("Controls")
+lookback = st.sidebar.selectbox("Lookback Period (for Movers)", ["7", "14", "30", "90"], index=2)
+lookback_days = int(lookback)
 
-    st.subheader(f"📌 {selected_company} ({selected_symbol}) Details")
-    current_price = round(info.get('regularMarketPrice',0),2)
-    st.metric("Current Price (₹)", current_price)
-    
-    # ---------------- Change Metrics ----------------
-    if len(hist) >= 30:
-        month_ago_price = hist['Close'][-30]
-        pct_change_30d = ((current_price - month_ago_price)/month_ago_price)*100
-    else:
-        pct_change_30d = np.nan
-    
-    if len(hist) >= 7:
-        week_ago_price = hist['Close'][-7]
-        pct_change_7d = ((current_price - week_ago_price)/week_ago_price)*100
-    else:
-        pct_change_7d = np.nan
-    
-    col1, col2 = st.columns(2)
-    col1.metric("Change Past 30 Days", f"{pct_change_30d:.2f}%", delta_color="normal",
-                help="Percentage change over the last 30 trading days")
-    col2.metric("Change Past 7 Days", f"{pct_change_7d:.2f}%", delta_color="normal",
-                help="Percentage change over the last 7 trading days")
-    
-    # ---------------- Essential Stock Info ----------------
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("52-Week High", round(info.get('fiftyTwoWeekHigh',0),2))
-    col2.metric("52-Week Low", round(info.get('fiftyTwoWeekLow',0),2))
-    col3.metric("Market Cap (₹B)", round(info.get('marketCap',0)/1e9,2))
-    col4.metric("Volume", round(info.get('volume',0),2))
+search = st.sidebar.text_input("🔍 Search company / symbol")
 
-    col5, col6 = st.columns(2)
-    col5.metric("P/E Ratio", round(info.get('trailingPE',0),2))
-    col6.metric("Dividend Yield", round(info.get('dividendYield',0)*100 if info.get('dividendYield') else 0,2))
+# --- Display Movers ---
+with st.spinner("Fetching top gainers & losers..."):
+    movers = get_top_movers(lookback_days)
 
-    # ---------------- News & Sentiment ----------------
-    st.subheader("📰 Latest News & Sentiment")
-    news_headlines = [
-        f"{selected_company} shows strong growth potential",
-        f"Investors are cautious about {selected_company} short term",
-        f"{selected_company} announces new strategic partnership",
-        f"{selected_company} stock underperforms analyst expectations"
-    ]
-    sentiment_scores = [analyzer.polarity_scores(h)["compound"] for h in news_headlines]
-    avg_sentiment = round(sum(sentiment_scores)/len(sentiment_scores),2) if sentiment_scores else 0
-    label = "Bullish" if avg_sentiment>0.2 else ("Bearish" if avg_sentiment<-0.2 else "Neutral")
-    st.metric("Average Sentiment", avg_sentiment, delta=label)
+col1, col2 = st.columns(2)
+col1.subheader(f"Top 10 Gainers (Last {lookback_days}D)")
+col1.dataframe(movers.head(10))
+fig1 = px.bar(movers.head(10), x="Ticker", y="% Change", color="% Change", title="Top Gainers", color_continuous_scale="greens")
+col1.plotly_chart(fig1, use_container_width=True)
 
-    st.write("**Top Headlines:**")
-    for h in news_headlines:
-        st.write(f"- {h}")
+col2.subheader(f"Top 10 Losers (Last {lookback_days}D)")
+col2.dataframe(movers.tail(10))
+fig2 = px.bar(movers.tail(10), x="Ticker", y="% Change", color="% Change", title="Top Losers", color_continuous_scale="reds")
+col2.plotly_chart(fig2, use_container_width=True)
 
-except Exception as e:
-    st.error(f"Error fetching data for {selected_company}: {e}")
+# --- Heatmap ---
+st.markdown("### 🔥 Heatmap of Stock Correlations")
+top_n = movers.head(20)['Ticker'].tolist()
+prices = get_prices(top_n, period="1mo")
+returns = pd.DataFrame({t: calc_returns(df) for t, df in prices.items() if not df.empty})
+corr = returns.corr()
 
-# ---------------- Footer ----------------
+fig, ax = plt.subplots(figsize=(10, 7))
+sns.heatmap(corr, cmap="coolwarm", ax=ax)
+st.pyplot(fig)
+
+# --- Company Search ---
 st.markdown("---")
-st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Prices in INR. 30-day and 7-day changes provide reliable short-term insight.")
+st.subheader("📈 Company Analysis")
+
+if search:
+    # Find closest ticker
+    match = nse_df[nse_df['Company Name'].str.contains(search, case=False, na=False)]
+    if match.empty:
+        match = nse_df[nse_df['Ticker'].str.contains(search.upper(), na=False)]
+    if match.empty:
+        st.warning("No matching company found.")
+    else:
+        selected = match.iloc[0]['Ticker']
+        st.success(f"Showing results for **{ticker_map[selected]} ({selected})**")
+
+        colA, colB = st.columns(2)
+        with colA:
+            st.write("Last 30 Days Performance")
+            hist_30 = yf.download(selected, period="1mo", interval="1d")
+            fig = px.line(hist_30, x=hist_30.index, y="Adj Close", title="Last 30 Days")
+            st.plotly_chart(fig, use_container_width=True)
+        with colB:
+            st.write("Last 7 Days Performance")
+            hist_7 = yf.download(selected, period="7d", interval="1d")
+            fig = px.line(hist_7, x=hist_7.index, y="Adj Close", title="Last 7 Days")
+            st.plotly_chart(fig, use_container_width=True)
+
+        # News & sentiment
+        st.subheader("📰 Latest News & Sentiment")
+        news = fetch_news(ticker_map[selected])
+        if not news:
+            st.info("No recent news found.")
+        else:
+            news_df = sentiment_summary(news)
+            st.dataframe(news_df)
+
+            avg_sentiment = news_df["Sentiment"].mean()
+            if avg_sentiment > 0.05:
+                sentiment_label = "🟢 Positive"
+            elif avg_sentiment < -0.05:
+                sentiment_label = "🔴 Negative"
+            else:
+                sentiment_label = "🟡 Neutral"
+            st.metric("Overall Sentiment", sentiment_label, f"{avg_sentiment:.2f}")
+
+else:
+    st.info("Search a company name or symbol in the sidebar to view insights.")
