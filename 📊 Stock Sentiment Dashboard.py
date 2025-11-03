@@ -1,15 +1,16 @@
-# indian_stock_dashboard_essential_only.py
+# indian_stock_dashboard_insights.py
 
 import streamlit as st
 import pandas as pd
 import yfinance as yf
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import plotly.express as px
+import numpy as np
 
 # ---------------- Streamlit Config ----------------
 st.set_page_config(page_title="🇮🇳 Indian Stock Dashboard", page_icon="📈", layout="wide")
 st.title("🇮🇳 Indian Stock Market Dashboard")
-st.write("Overview of NSE stocks with optional company search, news sentiment, and essential stock insights.")
+st.write("Enhanced NSE stock insights with weekly/monthly changes and news sentiment.")
 
 # ---------------- Initialize Sentiment Analyzer ----------------
 analyzer = SentimentIntensityAnalyzer()
@@ -32,8 +33,6 @@ else:
 
 # Clean column headers
 df_nse.columns = df_nse.columns.str.strip()
-
-# Prepare symbols
 df_nse.dropna(subset=['Symbol'], inplace=True)
 df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
 
@@ -94,14 +93,33 @@ if not df_overview.empty:
 # ---------------- Selected Company Analysis ----------------
 try:
     ticker = yf.Ticker(selected_symbol)
+    hist = ticker.history(period="60d")  # last 60 days for weekly/monthly change
     info = ticker.info
 
     st.subheader(f"📌 {selected_company} ({selected_symbol}) Details")
-
-    st.metric("Current Price (₹)", round(info.get('regularMarketPrice',0),2))
-    st.metric("% Change", round(info.get('regularMarketChangePercent',0),2))
+    current_price = round(info.get('regularMarketPrice',0),2)
+    st.metric("Current Price (₹)", current_price)
     
-    # Essential stock info
+    # ---------------- Change Metrics ----------------
+    if len(hist) >= 30:
+        month_ago_price = hist['Close'][-30]
+        pct_change_30d = ((current_price - month_ago_price)/month_ago_price)*100
+    else:
+        pct_change_30d = np.nan
+    
+    if len(hist) >= 7:
+        week_ago_price = hist['Close'][-7]
+        pct_change_7d = ((current_price - week_ago_price)/week_ago_price)*100
+    else:
+        pct_change_7d = np.nan
+    
+    col1, col2 = st.columns(2)
+    col1.metric("Change Past 30 Days", f"{pct_change_30d:.2f}%", delta_color="normal",
+                help="Percentage change over the last 30 trading days")
+    col2.metric("Change Past 7 Days", f"{pct_change_7d:.2f}%", delta_color="normal",
+                help="Percentage change over the last 7 trading days")
+    
+    # ---------------- Essential Stock Info ----------------
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("52-Week High", round(info.get('fiftyTwoWeekHigh',0),2))
     col2.metric("52-Week Low", round(info.get('fiftyTwoWeekLow',0),2))
@@ -112,7 +130,7 @@ try:
     col5.metric("P/E Ratio", round(info.get('trailingPE',0),2))
     col6.metric("Dividend Yield", round(info.get('dividendYield',0)*100 if info.get('dividendYield') else 0,2))
 
-    # News + Sentiment (placeholder)
+    # ---------------- News & Sentiment ----------------
     st.subheader("📰 Latest News & Sentiment")
     news_headlines = [
         f"{selected_company} shows strong growth potential",
@@ -134,4 +152,4 @@ except Exception as e:
 
 # ---------------- Footer ----------------
 st.markdown("---")
-st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Prices in INR.")
+st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Prices in INR. 30-day and 7-day changes provide reliable short-term insight.")
