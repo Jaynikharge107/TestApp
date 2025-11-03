@@ -1,13 +1,12 @@
-# indian_stock_dashboard_main.py
+# indian_stock_dashboard.py
 
 import streamlit as st
-import yfinance as yf
 import pandas as pd
+import yfinance as yf
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from prophet import Prophet
 from prophet.plot import plot_plotly
 import plotly.express as px
-import os
 
 # ---------------- Streamlit Config ----------------
 st.set_page_config(page_title="🇮🇳 Indian Stock Dashboard", page_icon="📈", layout="wide")
@@ -17,17 +16,28 @@ st.write("Overview of NSE stocks with optional company search, news sentiment, a
 # ---------------- Initialize Sentiment Analyzer ----------------
 analyzer = SentimentIntensityAnalyzer()
 
-# ---------------- Load NSE CSV ----------------
-try:
-    # CSV in main folder
-    df_nse = pd.read_csv(nse_stocks.csv)
-    df_nse.dropna(subset=['Symbol'], inplace=True)
-    df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
+# ---------------- File Upload / Load ----------------
+st.subheader("Upload NSE CSV (Optional if already in main folder)")
+uploaded_file = st.file_uploader("Choose your nse_stocks.csv", type=["csv"])
 
-    st.success(f"NSE symbols loaded successfully! Total stocks: {len(df_nse)}")
-except FileNotFoundError:
-    st.error("nse_stocks.csv not found in the main folder! Please upload it.")
+if uploaded_file is not None:
+    df_nse = pd.read_csv(uploaded_file)
+elif st.checkbox("Use CSV from main folder"):
+    try:
+        df_nse = pd.read_csv("nse_stocks.csv")
+    except FileNotFoundError:
+        st.error("CSV not found in main folder. Please upload it.")
+        st.stop()
+else:
+    st.warning("Please upload the CSV or enable the checkbox to use the main folder CSV.")
     st.stop()
+
+# Clean column headers
+df_nse.columns = df_nse.columns.str.strip()
+
+# Prepare symbols
+df_nse.dropna(subset=['Symbol'], inplace=True)
+df_nse['Symbol'] = df_nse['Symbol'].astype(str) + ".NS"
 
 # ---------------- Dropdown for Company Search ----------------
 st.subheader("🔍 Search a Company")
@@ -60,7 +70,7 @@ def fetch_stock_data(symbols):
 
 df_overview = fetch_stock_data(overview_symbols)
 
-# ---------------- Display Top Gainers / Losers ----------------
+# ---------------- Top Gainers / Losers ----------------
 if not df_overview.empty:
     st.subheader("📈 Top Gainers & Losers (NSE Overview)")
     top_gainers = df_overview.sort_values("% Change", ascending=False).head(5).reset_index(drop=True)
@@ -69,12 +79,12 @@ if not df_overview.empty:
     top_losers.index += 1
 
     st.markdown("**Top Gainers**")
-    st.dataframe(top_gainers.style.format({"Price (₹)": "{:.2f}", "% Change": "{:.2f}"})
-                 .applymap(lambda x: 'color: green;' if isinstance(x, float) else '', subset=["% Change"]))
+    st.dataframe(top_gainers.style.format({"Price (₹)":"{:.2f}","% Change":"{:.2f}"})
+                 .applymap(lambda x: 'color: green;' if isinstance(x,float) else '', subset=["% Change"]))
 
     st.markdown("**Top Losers**")
-    st.dataframe(top_losers.style.format({"Price (₹)": "{:.2f}", "% Change": "{:.2f}"})
-                 .applymap(lambda x: 'color: red;' if isinstance(x, float) else '', subset=["% Change"]))
+    st.dataframe(top_losers.style.format({"Price (₹)":"{:.2f}","% Change":"{:.2f}"})
+                 .applymap(lambda x: 'color: red;' if isinstance(x,float) else '', subset=["% Change"]))
 
     # Heatmap
     st.subheader("🌡️ Stock Performance Heatmap")
@@ -127,6 +137,6 @@ try:
 except Exception as e:
     st.error(f"Error fetching data for {selected_company}: {e}")
 
-# Footer
+# ---------------- Footer ----------------
 st.markdown("---")
 st.markdown("📌 Data fetched via Yahoo Finance. Sentiment analysis uses VADER. Trend prediction uses Prophet. Prices in INR.")
