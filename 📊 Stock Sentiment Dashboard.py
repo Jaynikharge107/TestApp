@@ -1,4 +1,4 @@
-# indian_stock_dashboard.py
+# indian_stock_dashboard_final.py
 
 import streamlit as st
 import pandas as pd
@@ -127,6 +127,9 @@ try:
         # Trend Prediction
         st.subheader("📊 Trend Prediction (Next 30 Days)")
         df_prophet = hist.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
+        # Fix timezone issue
+        df_prophet['ds'] = pd.to_datetime(df_prophet['ds']).dt.tz_localize(None)
+
         model = Prophet(daily_seasonality=True)
         model.fit(df_prophet)
         future = model.make_future_dataframe(periods=30)
