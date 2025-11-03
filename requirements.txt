@@ -1,7 +1,8 @@
-streamlit>=1.25.0
-pandas>=2.1.0
-yfinance>=0.2.27
-vaderSentiment>=3.3.2
-plotly>=5.20.0
-numpy>=1.26.0
-seaborn
+streamlit==1.39.0
+pandas==2.2.3
+yfinance==0.2.50
+plotly==5.24.1
+seaborn==0.13.2
+matplotlib==3.9.2
+googlenews-python==1.7.0
+vaderSentiment==3.3.2
