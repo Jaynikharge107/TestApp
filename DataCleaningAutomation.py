@@ -2,11 +2,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import re
+import time
 
-# ----------------------------------------
-# Helper Functions
-# ----------------------------------------
+SAMPLE_PATH = "/mnt/data/MF Sample data.xlsx"   # your uploaded file path (for demo)
 
+# -------------------------
+# Helper functions (same as before, with small additions)
+# -------------------------
 def clean_colnames(df):
     df = df.copy()
     df.columns = (
@@ -30,139 +32,216 @@ def auto_numeric(series):
     cleaned = cleaned.replace({"nan": None, "": None})
     return pd.to_numeric(cleaned, errors="coerce")
 
-def detect_and_convert_numeric(df):
+def detect_and_convert_numeric(df, log):
     df = df.copy()
     obj_cols = df.select_dtypes(include="object").columns
+    converted = []
     for col in obj_cols:
         sample = df[col].dropna().astype(str).head(20).tolist()
+        if not sample:
+            continue
         numeric_like = 0
         for s in sample:
             s2 = strip_money_percent(s)
             if re.fullmatch(r"-?\d+(\.\d+)?%?$", s2):
                 numeric_like += 1
-        if numeric_like >= len(sample)//2:
+        if numeric_like >= max(3, len(sample)//2):   # heuristic
+            before_nonnull = df[col].notna().sum()
             df[col] = auto_numeric(df[col])
-    return df
+            after_nonnull = df[col].notna().sum()
+            converted.append((col, before_nonnull, after_nonnull))
+            log.append(f"Converted column '{col}' from object -> numeric (non-null: {before_nonnull} -> {after_nonnull})")
+    return df, converted
 
-def convert_dates(df):
+def convert_dates(df, log):
     df = df.copy()
+    converted = []
     for col in df.columns:
-        try:
-            df[col] = pd.to_datetime(df[col], errors="ignore", infer_datetime_format=True)
-        except:
-            pass
-    return df
+        if df[col].dtype == "object":
+            # try parse
+            parsed = pd.to_datetime(df[col], errors="coerce", infer_datetime_format=True)
+            # if significant number parsed -> convert
+            non_null_parsed = parsed.notna().sum()
+            if non_null_parsed >= max(3, int(len(df) * 0.05)):  # >= 5% rows or >=3 rows
+                df[col] = parsed
+                converted.append((col, non_null_parsed))
+                log.append(f"Parsed column '{col}' as datetime (parsed {non_null_parsed} values)")
+    return df, converted
 
-def fill_missing(df):
+def fill_missing(df, log):
     df = df.copy()
+    # numeric median, categorical mode
     num_cols = df.select_dtypes(include=np.number).columns
     cat_cols = df.select_dtypes(include="object").columns
     for col in num_cols:
-        df[col].fillna(df[col].median(), inplace=True)
+        n_missing = df[col].isna().sum()
+        if n_missing:
+            median = df[col].median()
+            df[col].fillna(median, inplace=True)
+            log.append(f"Filled {n_missing} missing values in numeric column '{col}' with median = {median}")
     for col in cat_cols:
-        try:
-            df[col].fillna(df[col].mode()[0], inplace=True)
-        except:
-            df[col].fillna("", inplace=True)
+        n_missing = df[col].isna().sum()
+        if n_missing:
+            try:
+                mode = df[col].mode().iloc[0]
+                df[col].fillna(mode, inplace=True)
+                log.append(f"Filled {n_missing} missing values in categorical column '{col}' with mode = '{mode}'")
+            except Exception:
+                df[col].fillna("", inplace=True)
+                log.append(f"Filled {n_missing} missing values in categorical column '{col}' with empty string")
     return df
 
-def remove_duplicates(df):
+def remove_duplicates(df, log):
     df = df.copy()
     before = len(df)
     df = df.drop_duplicates().reset_index(drop=True)
     removed = before - len(df)
+    if removed:
+        log.append(f"Removed {removed} exact duplicate rows")
+    else:
+        log.append("No exact duplicate rows found")
     return df, removed
 
-def flag_outliers(df):
+def flag_outliers(df, log):
     df = df.copy()
     num_cols = df.select_dtypes(include=np.number).columns
+    added = []
     for col in num_cols:
         q1 = df[col].quantile(0.25)
         q3 = df[col].quantile(0.75)
         iqr = q3 - q1
         low = q1 - 1.5 * iqr
         high = q3 + 1.5 * iqr
-        df[f"{col}_is_outlier"] = ((df[col] < low) | (df[col] > high)).astype(int)
-    return df
+        out_col = f"{col}_is_outlier"
+        df[out_col] = ((df[col] < low) | (df[col] > high)).astype(int)
+        added.append(out_col)
+        log.append(f"Flagged outliers in '{col}' -> new column '{out_col}' (low={low:.3f}, high={high:.3f})")
+    return df, added
 
-def standardize_text(df):
+def standardize_text(df, log):
     df = df.copy()
     text_cols = df.select_dtypes(include="object").columns
     for col in text_cols:
+        before_sample = df[col].dropna().astype(str).head(3).tolist()
         df[col] = df[col].astype(str).str.strip().str.title()
+        after_sample = df[col].dropna().astype(str).head(3).tolist()
+        log.append(f"Standardized text in '{col}' (sample before -> after): {before_sample} -> {after_sample}")
     return df
 
+# -------------------------
+# UI
+# -------------------------
+st.set_page_config(layout="wide")
+st.title("🧹 Advanced Auto Data Cleaner — Custom Controls & Step Log")
 
-# ----------------------------------------
-# Streamlit UI
-# ----------------------------------------
+uploaded_file = st.file_uploader("Upload dataset (CSV/XLSX) or leave empty to use sample", type=["csv","xlsx"])
+use_sample = False
+if uploaded_file is None:
+    st.info("No file uploaded — using sample dataset for demo. (You can still upload your own file.)")
+    use_sample = True
 
-st.title("🧹 Advanced Auto Data Cleaner with Custom Controls")
-st.write("Upload any CSV/Excel file and choose exactly what cleaning tasks you want to perform.")
+# Initialize session state for checkboxes (so we can programmatically toggle them)
+checkbox_keys = ["clean_cols", "numeric_fix", "date_fix", "missing_fix", "dup_fix", "outlier_fix", "text_fix", "select_all"]
+for k in checkbox_keys:
+    if k not in st.session_state:
+        st.session_state[k] = False
 
-uploaded_file = st.file_uploader("Upload Dataset", type=["csv", "xlsx"])
+col1, col2 = st.columns([1,3])
+with col1:
+    st.header("Cleaning Steps")
+    st.session_state["select_all"] = st.checkbox("Select ALL", key="select_all")
+    # when select_all toggled, set other checkboxes accordingly
+    if st.session_state["select_all"]:
+        st.session_state["clean_cols"] = True
+        st.session_state["numeric_fix"] = True
+        st.session_state["date_fix"] = True
+        st.session_state["missing_fix"] = True
+        st.session_state["dup_fix"] = True
+        st.session_state["outlier_fix"] = True
+        st.session_state["text_fix"] = True
+    # individual controls (bound to session_state keys)
+    st.session_state["clean_cols"] = st.checkbox("Clean column names", key="clean_cols", value=st.session_state["clean_cols"])
+    st.session_state["numeric_fix"] = st.checkbox("Convert numeric-like columns", key="numeric_fix", value=st.session_state["numeric_fix"])
+    st.session_state["date_fix"] = st.checkbox("Convert date columns", key="date_fix", value=st.session_state["date_fix"])
+    st.session_state["missing_fix"] = st.checkbox("Fill missing values", key="missing_fix", value=st.session_state["missing_fix"])
+    st.session_state["dup_fix"] = st.checkbox("Remove duplicates", key="dup_fix", value=st.session_state["dup_fix"])
+    st.session_state["outlier_fix"] = st.checkbox("Flag outliers", key="outlier_fix", value=st.session_state["outlier_fix"])
+    st.session_state["text_fix"] = st.checkbox("Standardize text columns", key="text_fix", value=st.session_state["text_fix"])
 
-if uploaded_file:
-    st.success("File uploaded successfully!")
-
-    # Load file
-    if uploaded_file.name.endswith(".csv"):
-        df = pd.read_csv(uploaded_file)
+with col2:
+    st.header("Preview / Action")
+    if use_sample:
+        try:
+            df = pd.read_excel(SAMPLE_PATH)
+        except Exception as e:
+            st.error(f"Could not load sample file at {SAMPLE_PATH}: {e}")
+            df = pd.DataFrame()
     else:
-        df = pd.read_excel(uploaded_file)
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
 
-    st.subheader("📌 Raw Data Preview")
+    st.subheader("Raw Data (first 5 rows)")
     st.dataframe(df.head())
 
-    st.write("---")
-    st.subheader("⚙️ Choose Cleaning Steps")
+    run_button = st.button("🚀 Run Selected Cleaning Steps")
 
-    clean_cols = st.checkbox("Clean Column Names")
-    numeric_fix = st.checkbox("Convert Numeric-Like Columns")
-    date_fix = st.checkbox("Convert Date Columns")
-    missing_fix = st.checkbox("Fill Missing Values")
-    dup_fix = st.checkbox("Remove Duplicates")
-    outlier_fix = st.checkbox("Flag Outliers")
-    text_fix = st.checkbox("Standardize Text Columns")
-    select_all = st.checkbox("Select ALL Cleaning Steps")
+if run_button:
+    # Prepare log
+    change_log = []
+    df_work = df.copy()
 
-    if select_all:
-        clean_cols = numeric_fix = date_fix = missing_fix = dup_fix = outlier_fix = text_fix = True
+    # small delay to simulate processing and make UX clear
+    with st.spinner("Running cleaning steps (this will take ~5 seconds)..."):
+        # Step 1: clean colnames
+        if st.session_state["clean_cols"]:
+            before_cols = df_work.columns.tolist()
+            df_work = clean_colnames(df_work)
+            after_cols = df_work.columns.tolist()
+            change_log.append(f"Cleaned column names: {before_cols} -> {after_cols}")
 
-    if st.button("🚀 Run Cleaning"):
-        df_clean = df.copy()
+        # Step 2: numeric conversion
+        if st.session_state["numeric_fix"]:
+            df_work, conv = detect_and_convert_numeric(df_work, change_log)
 
-        if clean_cols:
-            df_clean = clean_colnames(df_clean)
+        # Step 3: date conversion
+        if st.session_state["date_fix"]:
+            df_work, dconv = convert_dates(df_work, change_log)
 
-        if numeric_fix:
-            df_clean = detect_and_convert_numeric(df_clean)
+        # simulate time (user requested 5 sec)
+        time.sleep(5)
 
-        if date_fix:
-            df_clean = convert_dates(df_clean)
+        # Step 4: fill missing
+        if st.session_state["missing_fix"]:
+            df_work = fill_missing(df_work, change_log)
 
-        if missing_fix:
-            df_clean = fill_missing(df_clean)
-
+        # Step 5: remove duplicates
         removed = 0
-        if dup_fix:
-            df_clean, removed = remove_duplicates(df_clean)
+        if st.session_state["dup_fix"]:
+            df_work, removed = remove_duplicates(df_work, change_log)
 
-        if outlier_fix:
-            df_clean = flag_outliers(df_clean)
+        # Step 6: flag outliers
+        if st.session_state["outlier_fix"]:
+            df_work, added_outcols = flag_outliers(df_work, change_log)
 
-        if text_fix:
-            df_clean = standardize_text(df_clean)
+        # Step 7: standardize text
+        if st.session_state["text_fix"]:
+            df_work = standardize_text(df_work, change_log)
 
-        st.subheader("🧼 Cleaned Data Preview")
-        st.dataframe(df_clean.head())
+    st.success("Cleaning completed ✅")
 
-        st.write(f"🗑️ Duplicates removed: **{removed} rows**")
+    # Show Change Log
+    st.subheader("📝 Change Log (what was done)")
+    if change_log:
+        for i, line in enumerate(change_log, start=1):
+            st.write(f"{i}. {line}")
+    else:
+        st.write("No cleaning steps were selected, so nothing was changed.")
 
-        cleaned_csv = df_clean.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Download Cleaned CSV",
-            data=cleaned_csv,
-            file_name="cleaned_dataset.csv",
-            mime="text/csv"
-        )
+    # Show cleaned preview and allow download
+    st.subheader("Cleaned Data Preview (first 8 rows)")
+    st.dataframe(df_work.head(8))
+
+    cleaned_csv = df_work.to_csv(index=False).encode("utf-8")
+    st.download_button("📥 Download cleaned CSV", cleaned_csv, file_name="cleaned_dataset.csv", mime="text/csv")
