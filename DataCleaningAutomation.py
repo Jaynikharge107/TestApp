@@ -140,11 +140,43 @@ if uploaded_file is None:
     st.info("No file uploaded — using sample dataset for demo. (You can still upload your own file.)")
     use_sample = True
 
-# Initialize session state for checkboxes (so we can programmatically toggle them)
-checkbox_keys = ["clean_cols", "numeric_fix", "date_fix", "missing_fix", "dup_fix", "outlier_fix", "text_fix", "select_all"]
-for k in checkbox_keys:
+# ===== Replace your old checkbox block with this safe version =====
+# initialize checkbox keys only once
+checkbox_keys = ["clean_cols", "numeric_fix", "date_fix", "missing_fix", "dup_fix", "outlier_fix", "text_fix"]
+
+for k in ["select_all"] + checkbox_keys:
     if k not in st.session_state:
         st.session_state[k] = False
+
+col1, col2 = st.columns([1, 3])
+with col1:
+    st.header("Cleaning Steps")
+
+   # Create the Select ALL widget first (rendered by Streamlit)
+    select_all = st.checkbox("Select ALL", value=st.session_state.get("select_all", False), key="select_all")
+
+    # Render the individual checkboxes using session_state as default values
+    # Important: use key param so Streamlit can manage widget-state. Don't assign st.session_state[...] = st.checkbox(...)
+    st.session_state["clean_cols"]   = st.checkbox("Clean column names", key="clean_cols", value=st.session_state["clean_cols"])
+    st.session_state["numeric_fix"]  = st.checkbox("Convert numeric-like columns", key="numeric_fix", value=st.session_state["numeric_fix"])
+    st.session_state["date_fix"]     = st.checkbox("Convert date columns", key="date_fix", value=st.session_state["date_fix"])
+    st.session_state["missing_fix"]  = st.checkbox("Fill missing values", key="missing_fix", value=st.session_state["missing_fix"])
+    st.session_state["dup_fix"]      = st.checkbox("Remove duplicates", key="dup_fix", value=st.session_state["dup_fix"])
+    st.session_state["outlier_fix"]  = st.checkbox("Flag outliers", key="outlier_fix", value=st.session_state["outlier_fix"])
+    st.session_state["text_fix"]     = st.checkbox("Standardize text columns", key="text_fix", value=st.session_state["text_fix"])
+
+    # Now apply the select-all/unselect-all logic (after widgets are created)
+    if select_all:
+        # set all to True
+        for k in checkbox_keys:
+            st.session_state[k] = True
+    else:
+        # optional: if user unchecks Select ALL, uncheck everything
+        # remove the following block if you want manual selections to remain after unchecking Select ALL
+        for k in checkbox_keys:
+            if st.session_state[k] and not select_all:
+                st.session_state[k] = False
+
 
 col1, col2 = st.columns([1,3])
 with col1:
